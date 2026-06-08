@@ -546,8 +546,8 @@ function goGame() {
   document.getElementById('countdown').textContent    = '';
 
   buildBeatRow(4);
+  showScreen('game');        // must come before renderRhythm so clientWidth is non-zero
   renderRhythm(gs.rhythm);
-  showScreen('game');
 }
 
 // ─── Listen (learn mode demo) ─────────────────────────────────────────────────
