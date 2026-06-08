@@ -155,7 +155,7 @@
     overflow: hidden;
     min-height: 120px;
   }
-  .staff-wrap svg { display: block; width: 100%; height: auto; }
+  .staff-wrap svg { display: block; }
 
   /* Playhead cursor */
   .playhead {
@@ -444,6 +444,15 @@ function renderRhythm(notes) {
   const wrap = document.getElementById('staff-wrap');
   wrap.innerHTML = '<div class="playhead" id="playhead"></div>';
 
+  try {
+    _renderRhythm(wrap, notes);
+  } catch(err) {
+    console.error('VexFlow render error:', err);
+    wrap.innerHTML += `<p style="color:#ef4444;padding:12px;font-size:13px">Render error: ${err.message}</p>`;
+  }
+}
+
+function _renderRhythm(wrap, notes) {
   const W = wrap.clientWidth - 32 || 600;
   const H = 160;
 
@@ -553,8 +562,9 @@ function goGame() {
   document.getElementById('countdown').textContent    = '';
 
   buildBeatRow(4);
-  showScreen('game');        // must come before renderRhythm so clientWidth is non-zero
-  renderRhythm(gs.rhythm);
+  showScreen('game');
+  // Defer one frame so the browser finishes layout before we measure clientWidth
+  requestAnimationFrame(() => renderRhythm(gs.rhythm));
 }
 
 // ─── Listen (learn mode demo) ─────────────────────────────────────────────────
