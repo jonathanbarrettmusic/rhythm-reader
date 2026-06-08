@@ -347,17 +347,24 @@ const TEMPO = 120;
 const BEAT = 60000 / TEMPO;
 
 function selectMode(mode) {
+  console.log('selectMode called:', mode);
   gs.mode = mode;
   document.querySelectorAll('#screen-menu .mode-grid .btn').forEach((b, i) => {
-    b.classList.toggle('active', (i === 0 && mode === 'learn') || (i === 1 && mode === 'performance'));
+    const isActive = (i === 0 && mode === 'learn') || (i === 1 && mode === 'performance');
+    b.classList.toggle('active', isActive);
   });
 }
 
 function selectLevel(level) {
+  console.log('selectLevel called:', level, 'gs.mode:', gs.mode);
   gs.level = level;
   document.querySelectorAll('#screen-menu .level-grid .btn').forEach((b, i) => {
     b.classList.toggle('active', i === level - 1);
   });
+  // Auto-navigate if mode is selected
+  if (gs.mode) {
+    setTimeout(() => goLesson(), 100);
+  }
 }
 
 function goMenu() {
@@ -565,30 +572,6 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Start screen selection
-document.querySelectorAll('#screen-menu .mode-grid .btn').forEach((btn, i) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#screen-menu .mode-grid .btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
-});
-
-document.querySelectorAll('#screen-menu .level-grid .btn').forEach((btn, i) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#screen-menu .level-grid .btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    if (gs.mode) goLesson();
-  });
-});
-
-// Start when both mode and level selected
-let modeSelected = false, levelSelected = false;
-document.querySelectorAll('#screen-menu .mode-grid .btn').forEach(btn => {
-  btn.addEventListener('click', () => { modeSelected = true; });
-});
-document.querySelectorAll('#screen-menu .level-grid .btn').forEach(btn => {
-  btn.addEventListener('click', () => { levelSelected = true; });
-});
 </script>
 
 </body>
