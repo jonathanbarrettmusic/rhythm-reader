@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rhythm Reader</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vexflow/5.0.0/vexflow.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .container {
+    max-width: 900px;
+    width: 100%;
+  }
+
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* Menu */
+  .menu {
+    text-align: center;
+    padding: 40px 20px;
+  }
+  .title {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #60a5fa;
+  }
+  .subtitle {
+    color: #94a3b8;
+    margin-bottom: 40px;
+    font-size: 1.1rem;
+  }
+
+  .mode-grid, .level-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+  }
+
+  .btn {
+    padding: 15px 20px;
+    border: 2px solid #475569;
+    background: transparent;
+    color: #e2e8f0;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .btn:hover {
+    border-color: #60a5fa;
+    color: #60a5fa;
+  }
+  .btn.active {
+    background: #60a5fa;
+    border-color: #60a5fa;
+    color: #0f172a;
+  }
+
+  /* Lesson Screen */
+  .lesson {
+    padding: 20px;
+    background: #1e293b;
+    border-radius: 12px;
+    margin-bottom: 20px;
+  }
+  .lesson-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .lesson-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+  }
+  .lesson-info {
+    color: #94a3b8;
+    font-size: 0.9rem;
+  }
+
+  .staff-container {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .staff-container svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .cursor {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 2px;
+    height: 100%;
+    background: #ef4444;
+    display: none;
+    z-index: 10;
+  }
+  .cursor.active {
+    display: block;
+  }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .btn-primary {
+    background: #60a5fa;
+    border-color: #60a5fa;
+    color: #0f172a;
+    font-weight: bold;
+    padding: 12px 24px;
+  }
+  .btn-primary:hover {
+    background: #3b82f6;
+    border-color: #3b82f6;
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .status {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.95rem;
+    min-height: 1.5em;
+  }
+  .status.hint {
+    color: #60a5fa;
+  }
+
+  .tap-button {
+    padding: 60px 40px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    background: #0ea5e9;
+    border: none;
+    color: white;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.1s;
+    margin: 20px auto;
+    display: block;
+    user-select: none;
+  }
+  .tap-button:active {
+    transform: scale(0.95);
+    background: #0284c7;
+  }
+
+  .results {
+    background: #1e293b;
+    padding: 30px;
+    border-radius: 12px;
+    text-align: center;
+  }
+  .result-score {
+    font-size: 3rem;
+    font-weight: bold;
+    color: #60a5fa;
+    margin: 20px 0;
+  }
+  .result-message {
+    font-size: 1.2rem;
+    margin: 20px 0;
+  }
+  .result-detail {
+    color: #94a3b8;
+    margin: 10px 0;
+  }
+
+  .metronome-visual {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 20px 0;
+  }
+  .beat-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #475569;
+    transition: all 0.1s;
+  }
+  .beat-dot.active {
+    background: #fbbf24;
+    transform: scale(1.5);
+  }
+
+  .countdown {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #fbbf24;
+    text-align: center;
+    min-height: 3rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- MENU -->
+  <div class="screen active" id="screen-menu">
+    <div class="menu">
+      <div class="title">♫ Rhythm Reader</div>
+      <div class="subtitle">Practice sightreading rhythms</div>
+
+      <div>
+        <h3 style="margin-bottom: 15px; color: #cbd5e1;">Choose Mode</h3>
+        <div class="mode-grid">
+          <button class="btn" onclick="selectMode('learn')">📖 Learn Mode</button>
+          <button class="btn" onclick="selectMode('performance')">⚡ Performance</button>
+        </div>
+      </div>
+
+      <div>
+        <h3 style="margin-bottom: 15px; color: #cbd5e1;">Choose Level</h3>
+        <div class="level-grid">
+          <button class="btn" onclick="selectLevel(1)">Level 1: Basics</button>
+          <button class="btn" onclick="selectLevel(2)">Level 2: Eighth notes</button>
+          <button class="btn" onclick="selectLevel(3)">Level 3: Dotted rhythms</button>
+          <button class="btn" onclick="selectLevel(4)">Level 4: Syncopation</button>
+          <button class="btn" onclick="selectLevel(5)">Level 5: Advanced</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LESSON -->
+  <div class="screen" id="screen-lesson">
+    <div class="lesson">
+      <div class="lesson-header">
+        <div>
+          <div class="lesson-title" id="lesson-title">Rhythm Reading</div>
+          <div class="lesson-info" id="lesson-info">Level 1 · Learn Mode</div>
+        </div>
+        <button class="btn" onclick="goMenu()">← Menu</button>
+      </div>
+
+      <div class="countdown" id="countdown"></div>
+      <div class="metronome-visual" id="beat-visual"></div>
+
+      <div class="staff-container" id="staff-container">
+        <div class="cursor" id="cursor"></div>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <div class="controls">
+        <button class="btn btn-primary" id="btn-listen" onclick="doListen()" style="display: none;">🔊 Listen</button>
+        <button class="btn btn-primary" id="btn-start" onclick="doStart()">▶ Start</button>
+        <button class="btn btn-primary" id="btn-retry" onclick="doRetry()" style="display: none;">🔄 Retry</button>
+      </div>
+
+      <button class="tap-button" id="tap-btn">TAP or press SPACE</button>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="screen" id="screen-results">
+    <div class="results">
+      <div style="font-size: 2rem; margin-bottom: 20px;">Results</div>
+      <div class="result-score" id="result-score">0%</div>
+      <div class="result-message" id="result-message"></div>
+      <div class="result-detail" id="result-detail"></div>
+      <div style="margin-top: 30px; display: flex; gap: 10px; justify-content: center;">
+        <button class="btn btn-primary" onclick="doRetry()">Retry This</button>
+        <button class="btn" onclick="goMenu()">Back to Menu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const Vex = VF;
+let synth, synth2;
+let gs = {
+  mode: null,
+  level: null,
+  rhythm: null,
+  taps: [],
+  isPlaying: false,
+  isListening: false,
+  beatIndex: 0,
+};
+
+const RHYTHM_POOLS = {
+  1: [ // Basics: quarters and halves
+    { notes: [1, 1, 1, 1], name: '4 quarters' },
+    { notes: [2, 2], name: '2 halves' },
+    { notes: [1, 1, 2], name: 'Q Q H' },
+    { notes: [2, 1, 1], name: 'H Q Q' },
+  ],
+  2: [ // Eighths
+    { notes: [0.5, 0.5, 1], name: 'E E Q' },
+    { notes: [0.5, 0.5, 0.5, 0.5, 1], name: 'E E E E Q' },
+    { notes: [1, 0.5, 0.5], name: 'Q E E' },
+    { notes: [0.5, 0.5, 1, 1], name: 'E E Q H' },
+  ],
+  3: [ // Dotted
+    { notes: [1.5, 0.5, 1], name: 'Dotted Q E Q' },
+    { notes: [1, 1.5, 0.5], name: 'Q Dotted Q E' },
+    { notes: [1.5, 0.5, 0.5, 0.5], name: 'Dotted Q E E E' },
+    { notes: [3, 1], name: 'Dotted H Q' },
+  ],
+  4: [ // Syncopation
+    { notes: [0.5, 1, 0.5, 1], name: 'E Q E Q' },
+    { notes: [1, 0.5, 0.5, 1], name: 'Q E E Q' },
+    { notes: [0.5, 0.5, 1, 0.5, 0.5], name: 'E E Q E E' },
+    { notes: [1, 0.5, 0.5, 0.5, 0.5], name: 'Q E E E E' },
+  ],
+  5: [ // Advanced
+    { notes: [0.25, 0.25, 0.5, 0.5, 0.5, 1], name: '16 16 E E E Q' },
+    { notes: [0.5, 0.25, 0.25, 0.5, 1], name: 'E 16 16 E Q' },
+    { notes: [1, 1, 0.5, 0.5, 0.5, 0.5], name: 'Q Q E E E E' },
+    { notes: [1.5, 0.5, 0.25, 0.25, 0.5, 1], name: 'Dotted Q E 16 16 E Q' },
+  ],
+};
+
+const TEMPO = 120;
+const BEAT = 60000 / TEMPO;
+
+function selectMode(mode) {
+  gs.mode = mode;
+  document.querySelectorAll('#screen-menu .mode-grid .btn').forEach((b, i) => {
+    b.classList.toggle('active', (i === 0 && mode === 'learn') || (i === 1 && mode === 'performance'));
+  });
+}
+
+function selectLevel(level) {
+  gs.level = level;
+  document.querySelectorAll('#screen-menu .level-grid .btn').forEach((b, i) => {
+    b.classList.toggle('active', i === level - 1);
+  });
+}
+
+function goMenu() {
+  showScreen('menu');
+  gs = { mode: null, level: null, rhythm: null, taps: [], isPlaying: false, isListening: false, beatIndex: 0 };
+}
+
+function goLesson() {
+  if (!gs.mode || !gs.level) return;
+  gs.rhythm = RHYTHM_POOLS[gs.level][Math.floor(Math.random() * RHYTHM_POOLS[gs.level].length)];
+  gs.taps = [];
+  gs.isPlaying = false;
+  gs.isListening = false;
+  gs.beatIndex = 0;
+
+  document.getElementById('lesson-info').textContent = `Level ${gs.level} · ${gs.mode === 'learn' ? 'Learn' : 'Performance'} Mode`;
+  document.getElementById('btn-listen').style.display = gs.mode === 'learn' ? 'block' : 'none';
+  document.getElementById('btn-retry').style.display = 'none';
+  document.getElementById('btn-start').style.display = 'block';
+  document.getElementById('status').textContent = '';
+  document.getElementById('countdown').textContent = '';
+
+  renderRhythm();
+  showScreen('lesson');
+}
+
+function renderRhythm() {
+  const container = document.getElementById('staff-container');
+  container.innerHTML = '<div class="cursor" id="cursor"></div>';
+
+  const renderContext = new Vex.Renderer(container, Vex.Renderer.Backends.SVG);
+  renderContext.resize(container.clientWidth - 40, 200);
+  const context = renderContext.getContext();
+  context.setFont('Arial', 12);
+
+  const stave = new Vex.Stave(10, 40, container.clientWidth - 60);
+  stave.addClef('treble');
+  stave.addTimeSignature('4/4');
+  stave.setContext(context).draw();
+
+  const notes = gs.rhythm.notes.map(dur => {
+    const durMap = { 0.25: '16', 0.5: '8', 1: 'q', 1.5: 'qd', 2: 'h', 3: 'hd' };
+    const key = durMap[dur] || 'q';
+    return new Vex.StaveNote({ keys: ['b/4'], duration: key });
+  });
+
+  const voice = new Vex.Voice({ numBeats: 4, beatValue: 4 });
+  voice.addTickables(notes);
+
+  new Vex.Formatter().joinVoices([voice]).formatToStave([voice], stave);
+  voice.draw(context, stave);
+
+  gs.totalBeats = gs.rhythm.notes.reduce((a, b) => a + b, 0) * 4;
+  gs.noteTimes = [];
+  let time = 0;
+  for (const dur of gs.rhythm.notes) {
+    gs.noteTimes.push(time);
+    time += dur * BEAT;
+  }
+
+  renderBeatVisual();
+}
+
+function renderBeatVisual() {
+  const visual = document.getElementById('beat-visual');
+  visual.innerHTML = '';
+  const numBeats = 4;
+  for (let i = 0; i < numBeats; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'beat-dot';
+    dot.id = `beat-${i}`;
+    visual.appendChild(dot);
+  }
+}
+
+function doListen() {
+  if (gs.isListening) return;
+  performRhythm(true);
+}
+
+function doStart() {
+  if (gs.isPlaying) return;
+  performRhythm(false);
+}
+
+async function performRhythm(isDemo) {
+  gs.isListening = isDemo;
+  gs.isPlaying = true;
+  gs.taps = [];
+  gs.beatIndex = 0;
+
+  document.getElementById('btn-listen').disabled = true;
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('tap-btn').disabled = true;
+  document.getElementById('status').textContent = isDemo ? 'Listening...' : 'Playing...';
+  document.getElementById('countdown').textContent = '';
+
+  // Count-in: 4 beats
+  const countInBeats = 4;
+  for (let i = 1; i <= countInBeats; i++) {
+    await sleep(BEAT);
+    updateBeatVisual(i - 1);
+    if (i < countInBeats) playClick();
+    if (isDemo && i <= gs.rhythm.notes.length) {
+      playNote(gs.rhythm.notes[0]); // Demo: play the first note
+    }
+  }
+
+  // Performance
+  const startTime = Date.now();
+  for (let i = 0; i < gs.noteTimes.length; i++) {
+    const targetTime = gs.noteTimes[i];
+    const waitTime = BEAT * targetTime / gs.totalBeats;
+
+    const now = Date.now() - startTime;
+    const remaining = waitTime - now;
+    if (remaining > 0) await sleep(remaining);
+
+    updateBeatVisual(i % 4);
+    if (!isDemo) playClick();
+    if (isDemo) playNote(gs.rhythm.notes[i]);
+  }
+
+  // Post-performance grace window
+  await sleep(BEAT * 0.5);
+
+  gs.isPlaying = false;
+  gs.isListening = false;
+
+  if (!isDemo) {
+    showResults();
+  } else {
+    document.getElementById('btn-start').disabled = false;
+    document.getElementById('tap-btn').disabled = false;
+    document.getElementById('status').textContent = 'Now it\'s your turn! Press "Start" to begin.';
+  }
+}
+
+function doRetry() {
+  goLesson();
+}
+
+function updateBeatVisual(beatIndex) {
+  document.querySelectorAll('.beat-dot').forEach((dot, i) => {
+    dot.classList.toggle('active', i === beatIndex);
+  });
+}
+
+function playClick() {
+  if (!synth) synth = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.05 } }).toDestination();
+  synth.triggerAttackRelease('800Hz', '0.1');
+}
+
+function playNote(duration) {
+  if (!synth2) synth2 = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.05 } }).toDestination();
+  synth2.triggerAttackRelease('600Hz', duration * BEAT / 1000);
+}
+
+function handleTap() {
+  if (!gs.isPlaying || gs.isListening) return;
+  gs.taps.push(Date.now());
+  document.getElementById('tap-btn').style.transform = 'scale(0.9)';
+  setTimeout(() => { document.getElementById('tap-btn').style.transform = 'scale(1)'; }, 100);
+}
+
+function showResults() {
+  const score = calculateScore();
+  document.getElementById('result-score').textContent = `${score}%`;
+
+  let message = '';
+  if (score === 100) message = '🎉 Perfect!';
+  else if (score >= 80) message = '✨ Excellent';
+  else if (score >= 60) message = '👍 Good';
+  else if (score >= 40) message = '💪 Keep practicing';
+  else message = '🎵 Try again';
+
+  document.getElementById('result-message').textContent = message;
+  document.getElementById('result-detail').textContent = `Taps: ${gs.taps.length} / Expected: ${gs.noteTimes.length}`;
+
+  showScreen('results');
+}
+
+function calculateScore() {
+  const expected = gs.noteTimes.length;
+  if (gs.taps.length === 0) return 0;
+
+  const accuracy = Math.min(gs.taps.length, expected) / expected * 100;
+  return Math.round(accuracy);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(`screen-${id}`).classList.add('active');
+}
+
+document.getElementById('tap-btn').addEventListener('click', handleTap);
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (document.getElementById('screen-lesson').classList.contains('active')) handleTap();
+  }
+});
+
+// Start screen selection
+document.querySelectorAll('#screen-menu .mode-grid .btn').forEach((btn, i) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#screen-menu .mode-grid .btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+document.querySelectorAll('#screen-menu .level-grid .btn').forEach((btn, i) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#screen-menu .level-grid .btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (gs.mode) goLesson();
+  });
+});
+
+// Start when both mode and level selected
+let modeSelected = false, levelSelected = false;
+document.querySelectorAll('#screen-menu .mode-grid .btn').forEach(btn => {
+  btn.addEventListener('click', () => { modeSelected = true; });
+});
+document.querySelectorAll('#screen-menu .level-grid .btn').forEach(btn => {
+  btn.addEventListener('click', () => { levelSelected = true; });
+});
+</script>
+
+</body>
+</html>
