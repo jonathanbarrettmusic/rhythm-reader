@@ -577,34 +577,35 @@ async function doListen() {
   setStatus('Count in…', true);
 
   const beatMs = 60000 / gs.bpm;
+  const t0 = Date.now(); // anchor: beat 1 of count-in fires right now
 
-  // 4-beat count-in
+  // 4-beat count-in, each beat scheduled against t0 to prevent drift
   for (let i = 0; i < 4; i++) {
+    await sleep(Math.max(0, t0 + i * beatMs - Date.now()));
     pulseBeat(i, i === 0);
-    document.getElementById('countdown').textContent = i === 0 ? '1' : i === 1 ? '2' : i === 2 ? '3' : '4';
+    document.getElementById('countdown').textContent = ['1','2','3','4'][i];
     clickHi();
-    await sleep(beatMs);
   }
-  document.getElementById('countdown').textContent = '';
 
-  // Demo: play each note with a tone
+  // Demo starts at exactly t0 + 4*beatMs — continuous from count-in
+  const demoStart = t0 + 4 * beatMs;
   gs.state = 'performing';
+  document.getElementById('countdown').textContent = '';
   setStatus('Listening…', true);
-  const demoStart = Date.now();
+
   for (let i = 0; i < gs.noteOnsets.length; i++) {
-    const due = gs.noteOnsets[i] - (Date.now() - demoStart);
-    if (due > 0) await sleep(due);
-    pulseBeat(Math.floor(gs.noteOnsets[i] / (60000 / gs.bpm)) % 4, false);
+    await sleep(Math.max(0, demoStart + gs.noteOnsets[i] - Date.now()));
+    pulseBeat(Math.floor(gs.noteOnsets[i] / beatMs) % 4, false);
     demoTone();
     animatePlayhead(i);
   }
 
-  await sleep(beatMs);
+  await sleep(Math.max(0, demoStart + gs.totalDuration + beatMs - Date.now()));
 
   gs.state = 'idle';
   disableControls(false);
   document.getElementById('btn-listen').textContent = '🔊 Again';
-  setStatus('Now press Start when you\'re ready.', true);
+  setStatus("Now press Start when you're ready.", true);
   document.querySelectorAll('.beat-dot').forEach(d => d.classList.remove('on','accent'));
 }
 
@@ -616,43 +617,47 @@ async function doStart() {
   disableControls(true);
 
   const beatMs = 60000 / gs.bpm;
+  const t0 = Date.now(); // anchor: beat 1 of count-in fires right now
 
-  // 4-beat count-in
+  // 4-beat count-in, each beat scheduled against t0 to prevent drift
   for (let i = 0; i < 4; i++) {
+    await sleep(Math.max(0, t0 + i * beatMs - Date.now()));
     pulseBeat(i, i === 0);
     document.getElementById('countdown').textContent = ['1','2','3','Go!'][i];
     i === 0 ? clickHi() : clickLo();
-    await sleep(beatMs);
   }
-  document.getElementById('countdown').textContent = '';
 
-  // Performance
+  // Performance starts at exactly t0 + 4*beatMs — beat 1 is the downbeat
+  gs.performStart = t0 + 4 * beatMs;
   gs.state = 'performing';
+  document.getElementById('countdown').textContent = '';
   document.getElementById('tap-btn').disabled = false;
   setStatus('Tap the rhythm!', true);
 
-  gs.performStart = Date.now();
+  // Metronome: schedule every beat from the same t0 anchor.
+  // beatTick=4 means the first performance click fires at t0+4*beatMs (= performStart).
+  let beatTick = 4;
+  (function scheduleTick() {
+    if (gs.state !== 'performing') return;
+    const delay = Math.max(0, t0 + beatTick * beatMs - Date.now());
+    setTimeout(() => {
+      if (gs.state !== 'performing') return;
+      pulseBeat(beatTick % 4, beatTick % 4 === 0);
+      beatTick % 4 === 0 ? clickHi() : clickLo();
+      beatTick++;
+      scheduleTick();
+    }, delay);
+  })();
 
-  // Metronome beats and playhead during performance
-  let beatTick = 0;
-  const beatInterval = setInterval(() => {
-    pulseBeat(beatTick % 4, beatTick % 4 === 0);
-    beatTick % 4 === 0 ? clickHi() : clickLo();
-    beatTick++;
-  }, beatMs);
-
-  // Animate playhead with requestAnimationFrame
   startPlayheadAnim(gs.performStart);
 
-  // Wait for the full rhythm duration + grace window
-  await sleep(gs.totalDuration + beatMs * 0.75);
+  // Wait until rhythm end + grace window, computed from the absolute end time
+  await sleep(Math.max(0, gs.performStart + gs.totalDuration + beatMs * 0.75 - Date.now()));
 
-  clearInterval(beatInterval);
+  gs.state = 'done';
   cancelRaf();
   document.getElementById('playhead').style.display = 'none';
   document.querySelectorAll('.beat-dot').forEach(d => d.classList.remove('on','accent'));
-
-  gs.state = 'done';
   showResults();
 }
 
