@@ -389,30 +389,62 @@ let gs = {
 };
 
 // ─── Rhythm library ───────────────────────────────────────────────────────────
-// Each note is a beat-fraction (quarter=1, eighth=0.5, etc.)
-// Rhythms must sum to 4 beats (one bar, 4/4)
+// Each pattern is an array of bars; each bar is an array of beat-fractions
+// that must sum to exactly 4 (quarter=1, eighth=0.5, dotted-quarter=1.5, etc.)
+// Level 1-3: 2 bars  |  Level 4: 3 bars  |  Level 5: 4 bars
 const POOLS = {
-  1: [
-    [1,1,1,1], [2,2], [2,1,1], [1,1,2], [1,3], [3,1],
+  1: [ // quarters & halves, 2 bars
+    [[1,1,1,1],     [1,1,1,1]],
+    [[2,2],         [1,1,2]],
+    [[1,1,2],       [2,1,1]],
+    [[2,1,1],       [1,3]],
+    [[4],           [2,2]],
+    [[1,1,1,1],     [2,1,1]],
+    [[3,1],         [1,1,2]],
+    [[2,2],         [4]],
   ],
-  2: [
-    [0.5,0.5,1,1,1], [1,0.5,0.5,1,1], [1,1,0.5,0.5,1], [0.5,0.5,0.5,0.5,2],
-    [0.5,0.5,2,0.5,0.5], [1,0.5,0.5,0.5,0.5,1],
+  2: [ // eighth notes, 2 bars
+    [[0.5,0.5,1,1,1],     [1,0.5,0.5,1,1]],
+    [[1,1,0.5,0.5,1],     [0.5,0.5,1,2]],
+    [[0.5,0.5,0.5,0.5,2], [1,0.5,0.5,1,1]],
+    [[1,0.5,0.5,0.5,0.5,1],[0.5,0.5,1,1,1]],
+    [[0.5,0.5,1,0.5,0.5,1],[1,1,0.5,0.5,1]],
+    [[1,0.5,0.5,2],        [0.5,0.5,0.5,0.5,1,1]],
   ],
-  3: [
-    [1.5,0.5,2], [2,1.5,0.5], [1.5,0.5,1,1], [1,1.5,0.5,1],
-    [1.5,0.5,0.5,0.5,1], [3,0.5,0.5],
+  3: [ // dotted rhythms, 2 bars
+    [[1.5,0.5,1,1],     [1,1.5,0.5,1]],
+    [[1.5,0.5,2],       [2,1.5,0.5]],
+    [[1,1.5,0.5,1],     [1.5,0.5,0.5,0.5,1]],
+    [[3,0.5,0.5],       [1.5,0.5,2]],
+    [[1.5,0.5,0.5,0.5,1],[1,3]],
+    [[2,1.5,0.5],       [1.5,0.5,1,1]],
   ],
-  4: [
-    [0.5,1,0.5,1,1], [1,0.5,0.5,2], [0.5,0.5,1,0.5,1,0.5],
-    [1,0.5,1,0.5,0.5,0.5], [0.5,1,1,1,0.5],
+  4: [ // syncopation, 3 bars
+    [[0.5,1,0.5,1,1], [1,0.5,0.5,2],       [0.5,0.5,1,0.5,1,0.5]],
+    [[1,0.5,0.5,2],   [0.5,1,0.5,1,1],     [1,0.5,1,0.5,0.5,0.5]],
+    [[0.5,0.5,1,1,1], [0.5,1,1,1,0.5],     [1,0.5,0.5,0.5,0.5,1]],
+    [[1,0.5,1,0.5,1], [0.5,0.5,0.5,0.5,2], [0.5,1,0.5,1,1]],  // bar1 = 1+0.5+1+0.5+1=4 ✓
+    [[0.5,1,1,1,0.5], [1,0.5,0.5,2],       [0.5,0.5,1,0.5,1,0.5]],
   ],
-  5: [
-    [0.25,0.25,0.5,1,1,1],        // 4 beats
-    [1,0.5,0.25,0.25,0.5,1.5],    // 4 beats
-    [0.5,0.25,0.25,1.5,0.5,1],    // 4 beats
-    [1.5,0.25,0.25,0.5,1.5],      // 4 beats
-    [0.25,0.25,0.5,0.5,0.5,0.5,1.5], // 4 beats (was 3.5 — fixed)
+  5: [ // advanced — sixteenths, dotted, 4 bars
+    [
+      [0.25,0.25,0.5,1,1,1],
+      [1,0.5,0.25,0.25,0.5,1.5],
+      [1.5,0.25,0.25,0.5,1.5],
+      [0.5,0.25,0.25,1.5,0.5,1],
+    ],
+    [
+      [1.5,0.25,0.25,0.5,1.5],
+      [0.25,0.25,0.5,0.5,0.5,0.5,1.5],
+      [1,0.5,0.25,0.25,2],
+      [0.5,0.25,0.25,1.5,0.5,1],
+    ],
+    [
+      [0.25,0.25,0.5,1,1,1],
+      [1,0.25,0.25,0.5,2],
+      [1.5,0.5,0.25,0.25,1.5],
+      [0.25,0.25,0.5,0.5,0.5,0.5,1.5],
+    ],
   ],
 };
 
@@ -455,46 +487,54 @@ function renderRhythm(notes) {
   }
 }
 
-function _renderRhythm(wrap, notes) {
+function _renderRhythm(wrap, bars) {
+  const numBars = bars.length;
   const W = wrap.clientWidth - 32 || 600;
+  // Give first bar extra width to absorb clef + time-sig symbols
+  const firstW = Math.floor((W - 20) * (numBars <= 2 ? 0.52 : 0.38));
+  const otherW = Math.floor((W - 20 - firstW) / (numBars - 1));
   const H = 160;
 
   const renderer = new VF.Renderer(wrap, VF.Renderer.Backends.SVG);
   renderer.resize(W, H);
   const context = renderer.getContext();
 
-  // Treble clef, all notes on B4 (middle line) — standard rhythm notation
-  const stave = new VF.Stave(10, 28, W - 20);
-  stave.addClef('treble');
-  stave.addTimeSignature('4/4');
-  stave.setContext(context).draw();
+  const DOTTED = new Set([0.75, 1.5, 3]);
+  const allVexNotes = [];
+  let lastStave = null;
 
-  const DOTTED = new Set([0.75, 1.5, 3]); // durations that need a dot modifier
+  bars.forEach((barNotes, barIdx) => {
+    const isFirst = barIdx === 0;
+    const isLast  = barIdx === numBars - 1;
+    const barW    = isFirst ? firstW : otherW;
+    const x       = isFirst ? 10 : 10 + firstW + (barIdx - 1) * otherW;
 
-  const vexNotes = notes.map(dur => {
-    const d = DUR_MAP[dur] || 'q';
-    const note = new VF.StaveNote({ keys: ['b/4'], duration: d, autoStem: true });
-    // VF5 sets tick count correctly from 'hd'/'qd' but does NOT attach the
-    // visual Dot modifier automatically — must do it explicitly.
-    if (DOTTED.has(dur)) VF.Dot.buildAndAttach([note], { all: true });
-    return note;
+    const stave = new VF.Stave(x, 28, barW);
+    if (isFirst) { stave.addClef('treble'); stave.addTimeSignature('4/4'); }
+    if (isLast)  stave.setEndBarType(VF.Barline.type.END);
+    stave.setContext(context).draw();
+
+    const vexNotes = barNotes.map(dur => {
+      const d = DUR_MAP[dur] || 'q';
+      const note = new VF.StaveNote({ keys: ['b/4'], duration: d, autoStem: true });
+      if (DOTTED.has(dur)) VF.Dot.buildAndAttach([note], { all: true });
+      return note;
+    });
+
+    const beams = VF.Beam.generateBeams(vexNotes);
+    const voice = new VF.Voice({ numBeats: 4, beatValue: 4 });
+    voice.setStrict(false);
+    voice.addTickables(vexNotes);
+    new VF.Formatter().joinVoices([voice]).formatToStave([voice], stave);
+    voice.draw(context, stave);
+    beams.forEach(b => b.setContext(context).draw());
+
+    allVexNotes.push(...vexNotes);
+    lastStave = stave;
   });
 
-  // Beam eighth/sixteenth notes
-  const beams = VF.Beam.generateBeams(vexNotes);
-
-  // Do NOT chain setStrict — it may not return `this` in VF5
-  const voice = new VF.Voice({ numBeats: 4, beatValue: 4 });
-  voice.setStrict(false);
-  voice.addTickables(vexNotes);
-
-  new VF.Formatter().joinVoices([voice]).formatToStave([voice], stave);
-  voice.draw(context, stave);
-  beams.forEach(b => b.setContext(context).draw());
-
-  // Store note X positions for playhead; staffEndX = right edge of stave
-  gs.noteXPositions = vexNotes.map(n => n.getAbsoluteX());
-  gs.staffEndX = stave.getX() + stave.getWidth();
+  gs.noteXPositions = allVexNotes.map(n => n.getAbsoluteX());
+  gs.staffEndX = lastStave.getX() + lastStave.getWidth();
 }
 
 // ─── Beat visual ──────────────────────────────────────────────────────────────
@@ -550,11 +590,17 @@ function goGame() {
   gs.taps   = [];
   gs.state  = 'idle';
 
-  // Precompute note onset times (ms from start of performance)
+  // Precompute note onset times by flattening bars
   const beatMs = 60000 / gs.bpm;
   let t = 0;
-  gs.noteOnsets = gs.rhythm.map(dur => { const onset = t; t += dur * beatMs; return onset; });
-  gs.totalDuration = t; // ms from start to end of last note
+  gs.noteOnsets = [];
+  for (const bar of gs.rhythm) {
+    for (const dur of bar) {
+      gs.noteOnsets.push(t);
+      t += dur * beatMs;
+    }
+  }
+  gs.totalDuration = t;
 
   document.getElementById('game-meta').textContent =
     `Level ${gs.level} · ${gs.mode === 'learn' ? 'Learn' : 'Performance'} Mode · ♩=${gs.bpm}`;
