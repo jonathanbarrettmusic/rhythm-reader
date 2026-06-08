@@ -408,9 +408,11 @@ const POOLS = {
     [1,0.5,1,0.5,0.5,0.5], [0.5,1,1,1,0.5],
   ],
   5: [
-    [0.25,0.25,0.5,1,1,1], [1,0.5,0.25,0.25,0.5,1.5],
-    [0.5,0.25,0.25,1.5,0.5,1], [1.5,0.25,0.25,0.5,1.5],
-    [0.25,0.25,0.5,0.5,0.5,0.5,0.5,0.5],
+    [0.25,0.25,0.5,1,1,1],        // 4 beats
+    [1,0.5,0.25,0.25,0.5,1.5],    // 4 beats
+    [0.5,0.25,0.25,1.5,0.5,1],    // 4 beats
+    [1.5,0.25,0.25,0.5,1.5],      // 4 beats
+    [0.25,0.25,0.5,0.5,0.5,0.5,1.5], // 4 beats (was 3.5 — fixed)
   ],
 };
 
@@ -484,10 +486,9 @@ function _renderRhythm(wrap, notes) {
   voice.draw(context, stave);
   beams.forEach(b => b.setContext(context).draw());
 
-  // Store note X positions for playhead sweep
+  // Store note X positions for playhead; staffEndX = right edge of stave
   gs.noteXPositions = vexNotes.map(n => n.getAbsoluteX());
-  const last = gs.noteXPositions[gs.noteXPositions.length - 1];
-  gs.staffEndX = Math.min(last + 50, W - 10);
+  gs.staffEndX = stave.getX() + stave.getWidth();
 }
 
 // ─── Beat visual ──────────────────────────────────────────────────────────────
@@ -595,7 +596,7 @@ async function doListen() {
     if (due > 0) await sleep(due);
     pulseBeat(Math.floor(gs.noteOnsets[i] / (60000 / gs.bpm)) % 4, false);
     demoTone();
-    animatePlayhead(gs.noteOnsets[i], gs.totalDuration);
+    animatePlayhead(i);
   }
 
   await sleep(beatMs);
@@ -641,7 +642,7 @@ async function doStart() {
   }, beatMs);
 
   // Animate playhead with requestAnimationFrame
-  startPlayheadAnim(gs.performStart, gs.totalDuration);
+  startPlayheadAnim(gs.performStart);
 
   // Wait for the full rhythm duration + grace window
   await sleep(gs.totalDuration + beatMs * 0.75);
@@ -658,31 +659,50 @@ async function doStart() {
 function doSkip() { goMenu(); }
 
 // ─── Playhead animation ───────────────────────────────────────────────────────
-function startPlayheadAnim(startMs, totalMs) {
+// Interpolates between each note's actual X position at its onset time,
+// so the bar moves slowly through long notes and quickly through short ones.
+function startPlayheadAnim(startMs) {
   const ph = document.getElementById('playhead');
-  const wrap = document.getElementById('staff-wrap');
   ph.style.display = 'block';
 
-  const startX = gs.noteXPositions[0] || 60;
-  const endX   = gs.staffEndX || (wrap.clientWidth - 20);
+  const onsets  = gs.noteOnsets;
+  const xPos    = gs.noteXPositions;
+  const endX    = gs.staffEndX;
+  const totalMs = gs.totalDuration;
 
   function frame() {
     const elapsed = Date.now() - startMs;
-    const progress = Math.min(elapsed / totalMs, 1);
-    ph.style.left = (startX + (endX - startX) * progress) + 'px';
-    if (progress < 1) gs.rafId = requestAnimationFrame(frame);
+
+    let x;
+    if (elapsed >= totalMs) {
+      x = endX;
+    } else {
+      // Find the note we're currently on (last onset that has passed)
+      let i = 0;
+      while (i < onsets.length - 1 && onsets[i + 1] <= elapsed) i++;
+
+      const fromX = xPos[i];
+      const fromT = onsets[i];
+      const toX   = i < xPos.length - 1 ? xPos[i + 1] : endX;
+      const toT   = i < onsets.length - 1 ? onsets[i + 1] : totalMs;
+      const frac  = toT > fromT ? (elapsed - fromT) / (toT - fromT) : 0;
+      x = fromX + (toX - fromX) * Math.min(frac, 1);
+    }
+
+    ph.style.left = x + 'px';
+    if (elapsed < totalMs + 100) gs.rafId = requestAnimationFrame(frame);
   }
   gs.rafId = requestAnimationFrame(frame);
 }
 
-function animatePlayhead(noteMs, totalMs) {
+function animatePlayhead(noteIdx) {
+  // For listen/demo mode: jump playhead directly to note's X position
   const ph = document.getElementById('playhead');
-  const wrap = document.getElementById('staff-wrap');
-  const startX = gs.noteXPositions[0] || 60;
-  const endX   = gs.staffEndX || (wrap.clientWidth - 20);
-  const progress = noteMs / totalMs;
   ph.style.display = 'block';
-  ph.style.left = (startX + (endX - startX) * progress) + 'px';
+  if (gs.noteXPositions[noteIdx] !== undefined) {
+    ph.style.left = gs.noteXPositions[noteIdx] + 'px';
+  }
+
 }
 
 function cancelRaf() {
