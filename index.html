@@ -469,9 +469,15 @@ function _renderRhythm(wrap, notes) {
   stave.addTimeSignature('4/4');
   stave.setContext(context).draw();
 
+  const DOTTED = new Set([0.75, 1.5, 3]); // durations that need a dot modifier
+
   const vexNotes = notes.map(dur => {
     const d = DUR_MAP[dur] || 'q';
-    return new VF.StaveNote({ keys: ['b/4'], duration: d, autoStem: true });
+    const note = new VF.StaveNote({ keys: ['b/4'], duration: d, autoStem: true });
+    // VF5 sets tick count correctly from 'hd'/'qd' but does NOT attach the
+    // visual Dot modifier automatically — must do it explicitly.
+    if (DOTTED.has(dur)) VF.Dot.buildAndAttach([note], { all: true });
+    return note;
   });
 
   // Beam eighth/sixteenth notes
