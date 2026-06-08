@@ -623,7 +623,8 @@ async function doStart() {
   disableControls(true);
 
   const beatMs = 60000 / gs.bpm;
-  const t0 = Date.now(); // anchor: beat 1 of count-in fires right now
+  const t0     = Date.now();          // wall-clock anchor for setTimeout scheduling
+  const t0Perf = performance.now();   // high-res anchor for rAF animation
 
   // 4-beat count-in, each beat scheduled against t0 to prevent drift
   for (let i = 0; i < 4; i++) {
@@ -634,7 +635,8 @@ async function doStart() {
   }
 
   // Performance starts at exactly t0 + 4*beatMs — beat 1 is the downbeat
-  gs.performStart = t0 + 4 * beatMs;
+  gs.performStart     = t0     + 4 * beatMs; // used for tap timestamps (Date.now())
+  gs.performStartPerf = t0Perf + 4 * beatMs; // used for rAF animation (performance.now())
   gs.state = 'performing';
   document.getElementById('countdown').textContent = '';
   document.getElementById('tap-btn').disabled = false;
@@ -655,7 +657,7 @@ async function doStart() {
     }, delay);
   })();
 
-  startPlayheadAnim(gs.performStart);
+  startPlayheadAnim(gs.performStartPerf);
 
   // Wait until rhythm end + grace window, computed from the absolute end time
   await sleep(Math.max(0, gs.performStart + gs.totalDuration + beatMs * 0.75 - Date.now()));
@@ -672,7 +674,10 @@ function doSkip() { goMenu(); }
 // ─── Playhead animation ───────────────────────────────────────────────────────
 // Interpolates between each note's actual X position at its onset time,
 // so the bar moves slowly through long notes and quickly through short ones.
-function startPlayheadAnim(startMs) {
+// startPerfTime must be a performance.now()-based timestamp so the rAF
+// callback's own high-res timestamp can be used directly — avoids the
+// 15ms Date.now() resolution issue that caused the visual to lag audio.
+function startPlayheadAnim(startPerfTime) {
   const ph = document.getElementById('playhead');
   ph.style.display = 'block';
 
@@ -681,14 +686,16 @@ function startPlayheadAnim(startMs) {
   const endX    = gs.staffEndX;
   const totalMs = gs.totalDuration;
 
-  function frame() {
-    const elapsed = Date.now() - startMs;
+  function frame(rafTime) {
+    // rafTime is a DOMHighResTimeStamp (performance.now() space, sub-ms)
+    const elapsed = rafTime - startPerfTime;
 
     let x;
     if (elapsed >= totalMs) {
       x = endX;
+    } else if (elapsed < 0) {
+      x = xPos[0] || 0; // before downbeat — hold at first note
     } else {
-      // Find the note we're currently on (last onset that has passed)
       let i = 0;
       while (i < onsets.length - 1 && onsets[i + 1] <= elapsed) i++;
 
